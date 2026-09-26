@@ -30,15 +30,34 @@ environment.
 | Decision log | `tail -f ~/.codex/codex-router/jev-router-live.jsonl` |
 | Current-policy cost/cache report | `python3 server/report_routing.py --days 7 --policy current` |
 | Kill switch (no Jev → frontier) | `touch ~/.codex/codex-router/jev-router.off` / `rm` to re-enable |
-| Install the launchd service | `bash server/install-service.sh` (in your own Terminal) |
-| Service status | `launchctl print gui/$(id -u)/com.thibaultsaintjean.jev-router` |
-| Service restart | `launchctl kickstart -k gui/$(id -u)/com.thibaultsaintjean.jev-router` |
-| Watchdog (no launchd) | `server/watchdog.sh`, e.g. cron every 5 min |
+| Install the background service | `bash server/install-service.sh` (in your own Terminal) |
+| Service status | `bash server/install-service.sh status` |
+| Service restart (after a policy edit) | `bash server/install-service.sh restart` |
+| Follow the service log | `bash server/install-service.sh logs` |
+| Uninstall the service | `bash server/install-service.sh uninstall` |
+| Watchdog (no service manager) | `server/watchdog.sh`, e.g. cron every 5 min |
 | Router status | `bin/jev-codex-router router status` |
 | Update the monorepo | `bin/jev-codex-router update` |
 | Hide the model | `router/bin/control picker set jev/auto hide` |
 | Disable the provider | `bin/jev-codex-router router providers generic disable jev` |
 | Revoke native sharing | `bin/jev-codex-router router chatgpt-session disable` |
+
+`install-service.sh` dispatches on the platform: `install-service-macos.sh`
+installs a launchd agent, `install-service-linux.sh` a `systemd --user` unit.
+Both pass the same environment (`CODEX_HOME`, `CODEX_ROUTER_STATE_DIR`, and
+`JEV_ENV_FILE` when set), and `render` prints the unit/plist without touching
+the service manager.
+
+| | macOS (launchd) | Linux (systemd --user) |
+|---|---|---|
+| Unit | `~/Library/LaunchAgents/com.thibaultsaintjean.jev-router.plist` | `~/.config/systemd/user/jev-router.service` |
+| Status | `launchctl print gui/$(id -u)/com.thibaultsaintjean.jev-router` | `systemctl --user status jev-router.service` |
+| Logs | `~/Library/Logs/jev-router.{out,err}.log` | `~/.local/state/jev-codex-router/jev-router.log` |
+| Survives logout | yes | only with `sudo loginctl enable-linger "$USER"` |
+
+A systemd user unit stops at logout unless linger is enabled, which makes a
+router that vanishes look exactly like a quota problem. The installer prints
+that reminder when it detects `Linger=no`.
 
 ## After an embedded router update
 

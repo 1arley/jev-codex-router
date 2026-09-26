@@ -94,4 +94,19 @@ CODEX_HOME=$codex_home CODEX_ROUTER_STATE_DIR=$state_dir \
 python3 "$repo_dir/server/smoke.py"
 
 printf '\nJev Codex Router is installed from %s.\n' "$repo_dir"
-printf 'Fully quit and reopen Codex, then select "Jev Codex Router".\n'
+case "$(uname -s)" in
+  Darwin)
+    printf 'Fully quit and reopen Codex, then select "Jev Codex Router".\n'
+    ;;
+  Linux)
+    # There is no Codex desktop app on Linux, so the picker catalog written by
+    # refresh-catalog is inert; the route is selected from the CLI instead.
+    cat <<'EOF'
+Codex has no desktop app here, so select the route from the CLI:
+
+  codex -m jev/auto
+
+Verify a routed turn with:  bash server/install-service.sh status
+EOF
+    ;;
+esac

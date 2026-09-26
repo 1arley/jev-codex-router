@@ -296,10 +296,12 @@ AGENTS.md        Autonomous install and operations playbook
 
 ## Quickstart
 
-Prerequisites: macOS with Codex desktop, Node.js 22.19+, Python 3.11+, and a
-TypeSafe API key for Jev. No separate Codex Router checkout is needed.
-See the [support and required CI matrix](docs/SUPPORT.md) for the pinned Codex
-contract, cross-platform fork coverage, and optional browser setup.
+Prerequisites: macOS with Codex desktop — or Linux with systemd user services
+and the Codex CLI, see [Linux](#linux-systemd-user-services) below — plus
+Node.js 22.19+, Python 3.11+, and a TypeSafe API key for Jev. No separate Codex
+Router checkout is needed. See the
+[support and required CI matrix](docs/SUPPORT.md) for the pinned Codex contract,
+cross-platform fork coverage, and optional browser setup.
 
 **1. Give the server your TypeSafe key** — either
 `export TYPESAFE_API_KEY=...` in the service environment, or:
@@ -322,8 +324,9 @@ continues in fail-open mode.
 
 The installer uses `router/` as the service source, preserves configured
 providers, idempotently adds `jev/auto`, provisions the protected loopback
-credential, enables native ChatGPT sharing, installs both launchd services, and
-runs `server/smoke.py`. It never clones or updates another repository.
+credential, enables native ChatGPT sharing, installs both background services
+(launchd on macOS, `systemd --user` on Linux), and runs `server/smoke.py`. It
+never clones or updates another repository.
 
 **3. Quit and reopen Codex**, then pick **“Jev Codex Router”** in the model picker.
 Check the transport as well as the picker: `jev/auto` must reach the local
@@ -342,10 +345,44 @@ The unified CLI exposes the embedded runtime without changing directory:
 
 ```bash
 bin/jev-codex-router router status
+bin/jev-codex-router service status
 bin/jev-codex-router update
 bin/jev-codex-router smoke
 bin/jev-codex-router report --days 7
 ```
+
+### Linux (systemd user services)
+
+Tested on Arch Linux / Omarchy. `./install.sh` is unchanged: it detects the
+platform and installs `server/install-service-linux.sh`, a `systemd --user`
+unit for `server/jev_server.py`, with the same `CODEX_HOME`,
+`CODEX_ROUTER_STATE_DIR` and `JEV_ENV_FILE` contract as the macOS launchd agent.
+
+```bash
+./install.sh                                   # full install, incl. the unit
+bin/jev-codex-router service status             # unit state + health endpoint
+bin/jev-codex-router service restart            # after editing routing_policy.py
+bin/jev-codex-router service logs               # ~/.local/state/jev-codex-router/jev-router.log
+bin/jev-codex-router service uninstall          # stop + remove the unit
+```
+
+Two Linux-specific facts:
+
+- **There is no Codex desktop app**, so the model picker does not exist. The
+  catalog written by `refresh-catalog` is inert; select the route from the CLI
+  instead: `codex -m jev/auto`. Everything else — the shared ChatGPT session,
+  the decision log, the kill switch, the Codex-dry fallback — is identical,
+  because both read `~/.codex/auth.json` and the router state directory.
+- **A user unit stops at logout** unless linger is enabled. Without it the
+  router disappears mid-day and Codex falls back, which looks like a quota
+  problem rather than a stopped service:
+
+  ```bash
+  sudo loginctl enable-linger "$USER"   # the installer reminds you when it detects Linger=no
+  ```
+
+Native model calls go to the ChatGPT backend on your plan, so run `codex login`
+first; `chatgpt-session enable` reports whether the shared session is usable.
 
 ## Operations
 
@@ -390,7 +427,7 @@ per-call attribution are excluded from the historical cost baseline.
 | Hide the model | `router/bin/control picker set jev/auto hide` |
 | Disable the provider | `bin/jev-codex-router router providers generic disable jev` |
 | Revoke native sharing | `bin/jev-codex-router router chatgpt-session disable` |
-| Service status | `launchctl print gui/$(id -u)/com.thibaultsaintjean.jev-router` |
+| Service status | `bin/jev-codex-router service status` (launchd: `launchctl print gui/$(id -u)/com.thibaultsaintjean.jev-router`) |
 
 `bin/jev-codex-router update` fetches this repository's `origin/main`, updates
 the complete checkout, then runs the root installer. It never updates the
@@ -403,6 +440,10 @@ bin/jev-codex-router router providers generic list  # shows: SHOW jev
 cat ~/.codex/codex-router/model-picker.json      # jev/auto in "visible"
 curl -s http://127.0.0.1:4319/health
 ```
+
+On Linux the picker file is informational — there is no desktop app to read it.
+`codex -m jev/auto` is the equivalent check, because it exercises the client
+transport that the picker would have used.
 
 ## Notes & quirks
 

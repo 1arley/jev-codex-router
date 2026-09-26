@@ -10,10 +10,23 @@ The installer and background-service contract are macOS-specific because they
 install launchd services and publish the model into the local Codex desktop
 configuration.
 
+This fork adds a Linux product target — Arch Linux / Omarchy, systemd user
+services, Codex CLI instead of the desktop app — with the same prerequisites.
+`server/install-service.sh` dispatches per platform: `install-service-macos.sh`
+(unchanged upstream behaviour) and `install-service-linux.sh`, a `systemd --user`
+unit for `server/jev_server.py` carrying the same `CODEX_HOME`,
+`CODEX_ROUTER_STATE_DIR` and `JEV_ENV_FILE` environment as the plist. The
+embedded router fork already installed its own `systemd` unit on Linux, and
+native ChatGPT sharing already read `$CODEX_HOME/auth.json` on every platform,
+so the Jev decision server, the provider registration and the model catalog
+needed no change. Two differences remain and are not bugs: the Codex model
+picker does not exist without the desktop app (`codex -m jev/auto` selects the
+route), and a user unit stops at logout unless `loginctl enable-linger` is set.
+
 The embedded router under `router/` remains a cross-platform fork. Its portable
 runtime and state-management suite is required on Ubuntu, macOS, and Windows
 with Node.js 24 in CI. Passing that matrix does not make the root launchd
-installer supported on Linux or Windows.
+installer supported on Windows.
 
 ## Required CI lanes
 

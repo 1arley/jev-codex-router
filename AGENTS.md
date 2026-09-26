@@ -30,20 +30,24 @@ on Jev classification errors; there is a kill switch.
    the documented state files (`user-models.json`, `generic-providers.json`),
    and leave the artifacts to be regenerated.
 3. The server binds `127.0.0.1` only. Never expose it on another interface.
-4. If `launchctl` is restricted in your environment (supervised agents often),
-   skip the service install — use the watchdog pattern and let the user run
-   `server/install-service.sh` from their own Terminal instead. Never fight
-   the restriction.
+4. If the service manager is restricted in your environment (supervised agents
+   often), skip the service install — use the watchdog pattern and let the user
+   run `server/install-service.sh` from their own Terminal instead. Never fight
+   the restriction. That is `launchctl` on macOS, `systemctl --user` on Linux.
 5. Treat prompt excerpts in local logs (`jev-router-live.jsonl`,
    `shadow-log.jsonl`) as private user data: read locally, never republish.
 
 ## Prerequisites (check, and report what you found)
 
-- **macOS** with **Codex**. No separate Codex Router checkout is required.
+- **macOS with the Codex desktop app**, or **Linux with systemd user services
+  and the Codex CLI** (`codex -m jev/auto`; there is no picker without the
+  desktop app). No separate Codex Router checkout is required.
 - **Node.js ≥ 22.19** — `node -v`.
 - **Python ≥ 3.11** — `python3 -V`.
 - A **TypeSafe API key** for Jev. The server looks for `TYPESAFE_API_KEY` in
   `~/.hermes/.env` first, then `~/.jev.env`, then the process environment.
+  A systemd unit inherits no shell environment, so the key has to live in that
+  file (or in the file named by `JEV_ENV_FILE`) rather than in an `export`.
   If none exists, **stop and ask the user where their key file is — never ask
   for the key value itself in chat.**
 
@@ -67,17 +71,21 @@ node -p 'require("./router/package.json").name'
 This is the only supported full installation path. It uses `router/` directly,
 preserves existing provider selection, idempotently configures the `jev`
 provider and `jev/auto` model, provisions the protected local credential,
-enables native ChatGPT sharing, installs both launchd services, publishes the
-picker and runs the end-to-end smoke test. It never clones another repository.
+enables native ChatGPT sharing, installs both background services (launchd on
+macOS, `systemd --user` on Linux), publishes the picker and runs the
+end-to-end smoke test. It never clones another repository.
 
-If `launchctl` is restricted, run `./install.sh --prepare-only`, perform
+If the service manager is restricted, run `./install.sh --prepare-only`, perform
 non-service diagnostics, then ask the user to run `./install.sh` in their own
 Terminal. Do not redirect the installation to a second checkout.
 
-### 3 — Restart Codex
+### 3 — Select the route in Codex
 
-Fully quit and reopen the Codex app so it reloads the picker catalog, then the
-user can select **Jev Codex Router**.
+macOS: fully quit and reopen the Codex app so it reloads the picker catalog,
+then select **Jev Codex Router**.
+
+Linux: run `codex -m jev/auto`. The catalog is written but nothing reads it
+without the desktop app, so the CLI invocation is the transport check.
 
 ## End-to-end verification (must pass before declaring success)
 
@@ -142,8 +150,8 @@ tail -1 ~/.codex/codex-router/jev-router-live.jsonl
   unified installer; it never pulls a separate router checkout.
 - **Disable**: `bin/jev-codex-router router providers generic disable jev`
   (keeps state); full rollback: also
-  `bin/jev-codex-router router chatgpt-session disable` and stop the
-  service (`launchctl bootout gui/$(id -u)/com.thibaultsaintjean.jev-router`).
+  `bin/jev-codex-router router chatgpt-session disable` and
+  `bin/jev-codex-router service uninstall`.
 
 ## Troubleshooting
 
@@ -158,7 +166,9 @@ tail -1 ~/.codex/codex-router/jev-router-live.jsonl
 | `Unknown API gateway model: jev-auto` | catalog not republished | `bin/jev-codex-router router refresh-catalog` |
 | Jev returns HTTP 422 | request body missing `"model"` | always send `"model": "jev-latest"` to the System One API |
 | Native calls fail after a few days | shared session expired | re-run `chatgpt-session enable` |
-| `launchctl` rejected inside a supervised agent | environment restriction | run `./install.sh --prepare-only`; let the user run `./install.sh` in Terminal |
+| `launchctl` / `systemctl --user` rejected inside a supervised agent | environment restriction | run `./install.sh --prepare-only`; let the user run `./install.sh` in Terminal |
+| Linux: routing stopped after logout | user units die with the session | `sudo loginctl enable-linger "$(id -un)"`, then `service restart` |
+| Linux: `systemctl --user` cannot reach a user session | no user manager (headless SSH, no login) | same `enable-linger` fix; the installer refuses to write a unit it cannot start |
 
 ## Latency & cost notes
 

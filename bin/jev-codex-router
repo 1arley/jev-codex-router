@@ -18,6 +18,8 @@ Usage: jev-codex-router COMMAND [ARGS...]
 Commands:
   install [--prepare-only]  Install the complete embedded stack
   update [ARGS...]          Update the monorepo and reinstall the complete stack
+  service [VERB]            Manage the local Jev service:
+                            install|render|status|restart|logs|uninstall
   router ARGS...            Run the embedded codex-router CLI
   smoke                     Run the Jev end-to-end smoke test
   report [ARGS...]          Report observed routing and cache usage
@@ -30,6 +32,7 @@ if [ "$#" -gt 0 ]; then shift; fi
 case "$command" in
   install) exec "$repo_dir/install.sh" "$@" ;;
   update) exec "$repo_dir/router/bin/codex-router" update "$@" ;;
+  service) exec "$repo_dir/server/install-service.sh" "$@" ;;
   router) exec "$repo_dir/router/bin/codex-router" "$@" ;;
   smoke) exec python3 "$repo_dir/server/smoke.py" "$@" ;;
   report) exec python3 "$repo_dir/server/report_routing.py" "$@" ;;
