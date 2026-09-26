@@ -17,8 +17,9 @@ on Jev classification errors; there is a kill switch.
 
 ## Hard rules (never violate)
 
-1. **Never print, log, commit, or transmit secrets** — the TypeSafe API key,
-   the router `caller-secret`, or ChatGPT tokens. Reference them by file path.
+1. **Never print, log, commit, or transmit secrets** — the Jev provider key
+   (`JEV_API_KEY`/`TYPESAFE_API_KEY`), the router `caller-secret`, or ChatGPT
+   tokens. Reference them by file path.
 2. **Edit the source, never the artifact.** `router/src/` is the embedded
    router's source and is meant to be edited: a behaviour bug is fixed there,
    committed in this repository, with the tests that cover it.
@@ -44,12 +45,16 @@ on Jev classification errors; there is a kill switch.
   desktop app). No separate Codex Router checkout is required.
 - **Node.js ≥ 22.19** — `node -v`.
 - **Python ≥ 3.11** — `python3 -V`.
-- A **TypeSafe API key** for Jev. The server looks for `TYPESAFE_API_KEY` in
-  `~/.hermes/.env` first, then `~/.jev.env`, then the process environment.
-  A systemd unit inherits no shell environment, so the key has to live in that
-  file (or in the file named by `JEV_ENV_FILE`) rather than in an `export`.
+- A **Jev provider key**. The server looks for `JEV_API_KEY`, then
+  `TYPESAFE_API_KEY`, in `~/.hermes/.env` first, then `~/.jev.env`, then the
+  process environment. A systemd unit inherits no shell environment, so the key
+  has to live in that file (or in the file named by `JEV_ENV_FILE`) rather than
+  in an `export`.
   If none exists, **stop and ask the user where their key file is — never ask
   for the key value itself in chat.**
+- The endpoint defaults to the hosted TypeSafe API. `JEV_API_URL` and
+  `JEV_MODEL` in the same env file point it at any System One compatible
+  gateway instead; `GET /health` reports both, never the key.
 
 ## Install, step by step
 

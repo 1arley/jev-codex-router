@@ -69,8 +69,10 @@ class KeyLoading(unittest.TestCase):
         with mock.patch.object(jev, "load_key", return_value=""), \
              mock.patch.object(jev.sys, "stderr", stderr):
             self.assertTrue(jev.warn_if_key_missing())
-        self.assertIn("TYPESAFE_API_KEY is not configured", stderr.getvalue())
-        self.assertIn("fail open to astra", stderr.getvalue())
+        warning = stderr.getvalue()
+        self.assertIn("JEV_API_KEY", warning)
+        self.assertIn("TYPESAFE_API_KEY", warning)
+        self.assertIn("fail open to astra", warning)
 
     def test_configured_key_stays_silent(self):
         stderr = io.StringIO()

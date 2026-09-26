@@ -316,6 +316,29 @@ falls back to `~/.hermes/.env`, then `~/.jev.env`, then `TYPESAFE_API_KEY` from
 the process environment. A keyless startup emits a warning before routing
 continues in fail-open mode.
 
+**Any System One compatible endpoint works**, not only the hosted TypeSafe API.
+`JEV_API_URL` and `JEV_MODEL` select the endpoint and the model, and
+`JEV_API_KEY` is the provider-neutral name for the bearer credential
+(`TYPESAFE_API_KEY` still works and is the fallback). All three are read from
+the same env files, which matters under `systemd`/`launchd` where a service
+inherits no shell environment:
+
+```bash
+cat >> ~/.hermes/.env <<'EOF'
+JEV_API_URL=http://127.0.0.1:20128/v1/systemone
+JEV_MODEL=oc/jev-1.13-free
+JEV_API_KEY=your-key
+EOF
+```
+
+The contract a replacement endpoint must keep is the request
+`{model, state, questions}` answered with an `answers` object of typed
+decisions (`noul`, `choice`, `score`) — `server/test_jev_provider_config.py`
+pins both halves. `GET /health` reports the endpoint and model in use, so you
+can confirm which Jev answered without reading the key. Restart the service
+after editing the env file: the endpoint and model are resolved at startup,
+while the key is re-read per call.
+
 **2. Install the complete stack from this checkout** in your Terminal:
 
 ```bash

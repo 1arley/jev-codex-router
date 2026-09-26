@@ -19,9 +19,32 @@ and prints metadata only. The Jev server reads the protected `jev.key` in the
 router's `generic-provider-credentials` directory. All POSTs require a Bearer
 header; the parent adds it automatically. Direct `/ask` clients must add it.
 No OpenAI Platform API key is needed for this local ChatGPT-session relay.
-The Jev key loader checks `JEV_ENV_FILE` first when configured, then
-`~/.hermes/.env`, `~/.jev.env`, and finally `TYPESAFE_API_KEY` from the process
-environment.
+The Jev provider credential loader checks `JEV_ENV_FILE` first when configured,
+then `~/.hermes/.env`, `~/.jev.env`, and finally the process environment, for
+`JEV_API_KEY` or `TYPESAFE_API_KEY` in that order.
+
+### Pointing Jev at another endpoint
+
+`JEV_API_URL` and `JEV_MODEL` select which System One answers; the defaults are
+`https://api.typesafe.ai/v1/systemone` and `jev-latest`. Both come from the same
+env files as the key, because a service manager gives the process no shell
+environment:
+
+```sh
+# ~/.hermes/.env, or the file named by JEV_ENV_FILE
+JEV_API_URL=http://127.0.0.1:20128/v1/systemone
+JEV_MODEL=oc/jev-1.13-free
+JEV_API_KEY=...
+```
+
+A non-`http(s)` URL is ignored in favour of the default rather than handed to
+urllib. The request and response shapes are the contract, not the URL: the
+server POSTs `{model, state, questions}` with a bearer token and reads an
+`answers` object of typed decisions, so any endpoint that keeps both halves is a
+drop-in. `curl -s http://127.0.0.1:4319/health` reports `jev_endpoint` and
+`jev_model` (never the key) so you can confirm which Jev is answering. Restart
+the service after editing the env file: endpoint and model resolve at startup,
+the key is re-read per call.
 
 ## Lifecycle
 

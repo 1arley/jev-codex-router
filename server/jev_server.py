@@ -119,8 +119,63 @@ ROUTER = ("127.0.0.1", 4202)
 DISPLAY_NAME = "Jev Codex Router"
 VERSION = "1.5"
 
-API = "https://api.typesafe.ai/v1/systemone"
-MODEL = "jev-latest"
+DEFAULT_API = "https://api.typesafe.ai/v1/systemone"
+DEFAULT_MODEL = "jev-latest"
+KEY_NAMES = ("JEV_API_KEY", "TYPESAFE_API_KEY")
+
+
+def env_files():
+    """Candidate env files in precedence order: JEV_ENV_FILE, then the defaults."""
+    override = os.environ.get("JEV_ENV_FILE", "").strip()
+    seen = set()
+    for path in (override, ENV_PATH, os.path.join(HOME, ".jev.env")):
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        yield path
+
+
+def env_file_values():
+    """Merged KEY=VALUE from those files; the first file to define a name wins.
+
+    Read per call, not cached: rotating a key must not need a restart, and a
+    stale value that outlives its file is worse than a small file read.
+    """
+    values = {}
+    for path in env_files():
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    name, value = line.split("=", 1)
+                    value = value.strip().strip('"').strip("'")
+                    if value:
+                        values.setdefault(name.strip(), value)
+        except OSError:
+            continue
+    return values
+
+
+def provider_setting(name, default=""):
+    """One provider setting: env file first, then the process environment.
+
+    The file wins for the same reason the key does -- a service manager can
+    carry a stale environment long after the file changed.
+    """
+    return env_file_values().get(name) or os.environ.get(name, "").strip() or default
+
+
+def resolve_api_url(value):
+    """Only http(s) is a System One endpoint; anything else falls back."""
+    if value.startswith("https://") or value.startswith("http://"):
+        return value.rstrip("/")
+    return DEFAULT_API
+
+
+API = resolve_api_url(provider_setting("JEV_API_URL", DEFAULT_API))
+MODEL = provider_setting("JEV_MODEL", DEFAULT_MODEL)
 
 
 # Generic ask surface (POST /ask): a thin typed pass-through to System One for
@@ -235,25 +290,16 @@ GOAL_BODY_RX = re.compile(
 ENVELOPE_SCAN_CHARS = 200_000
 
 def load_key():
-    """TYPESAFE_API_KEY: env files win (the process environment can be stale)."""
-    override = os.environ.get("JEV_ENV_FILE", "").strip()
-    paths = (override, ENV_PATH, os.path.join(HOME, ".jev.env"))
-    seen = set()
-    for path in paths:
-        if not path or path in seen:
-            continue
-        seen.add(path)
-        try:
-            with open(path, encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if line.startswith("TYPESAFE_API_KEY="):
-                        value = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        if value:
-                            return value
-        except OSError:
-            continue
-    return os.environ.get("TYPESAFE_API_KEY", "").strip()
+    """JEV_API_KEY, or TYPESAFE_API_KEY: env files win (the process environment can be stale)."""
+    values = env_file_values()
+    for name in KEY_NAMES:
+        if values.get(name):
+            return values[name]
+    for name in KEY_NAMES:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
 
 
 def warn_if_key_missing():
@@ -261,8 +307,8 @@ def warn_if_key_missing():
     if load_key():
         return False
     print(
-        "[jev-router] warning: TYPESAFE_API_KEY is not configured; "
-        "Jev decisions will fail open to astra",
+        "[jev-router] warning: no JEV_API_KEY/TYPESAFE_API_KEY is configured; "
+        f"Jev decisions will fail open to astra (endpoint {API})",
         file=sys.stderr,
         flush=True,
     )
@@ -574,7 +620,7 @@ def call_jev(key, state, questions=None, timeout=4.0):
 
 
 def call_jev_routed(key, state, questions=None, timeout=4.0):
-    """One System One call, on the direct TypeSafe API."""
+    """One System One call, on the configured endpoint (TypeSafe by default)."""
     return call_jev(key, state, questions, timeout=timeout)
 
 
@@ -1788,7 +1834,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": {"message": error}})
         key = load_key()
         if not key:
-            return self._json(503, {"error": {"message": "TYPESAFE_API_KEY is not configured"}})
+            return self._json(503, {"error": {"message": "JEV_API_KEY is not configured"}})
         t0 = time.time()
         try:
             answer = call_jev_routed(key, state, questions, timeout=ASK_TIMEOUT)
@@ -1817,6 +1863,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ("/health", ""):
             self._json(200, {"ok": True, "service": "jev-router", "version": VERSION,
                              "policy_version": POLICY_VERSION,
+                             # Endpoint and model are configuration, not secrets:
+                             # naming them is how you confirm which Jev answers.
+                             "jev_endpoint": API, "jev_model": MODEL,
                              "auth_configured": bool(local_secret())})
         else:
             self._json(404, {"error": {"message": "not found"}})
