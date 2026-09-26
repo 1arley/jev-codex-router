@@ -8,9 +8,11 @@ developer's own unit would be a test that acts on the machine it runs on.
 
 import os
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import skipUnless
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -49,6 +51,34 @@ class LinuxServiceUnit(unittest.TestCase):
         )
         self.assertIn(f"StandardOutput=append:{home}/state/jev-codex-router", unit)
         self.assertNotIn("JEV_ENV_FILE", unit)
+
+    def test_working_directory_is_unquoted(self):
+        # WorkingDirectory is a path, not an argv: systemd does not strip quotes
+        # there, and a quoted value fails the unit with "path is not absolute".
+        # Asserting the shape here is what the first install got wrong.
+        unit = render({})
+        self.assertIn(f"\nWorkingDirectory={ROOT}\n", unit)
+        self.assertNotIn('WorkingDirectory="', unit)
+
+    @skipUnless(shutil.which("systemd-analyze"), "systemd-analyze not available")
+    def test_systemd_accepts_the_rendered_unit(self):
+        """The rendered unit is parsed by systemd itself, not by this test.
+
+        Reading the text proves the strings; only systemd can prove the file is
+        loadable, and a unit systemd refuses fails at `enable --now` with "bad
+        unit file setting" -- after the installer already claimed success. The
+        whole stderr is treated as fatal rather than filtered by path: the
+        verdict lines name the unit, not the file.
+        """
+        with tempfile.TemporaryDirectory() as temp:
+            path = pathlib.Path(temp) / "jev-router.service"
+            path.write_text(render({"XDG_STATE_HOME": str(pathlib.Path(temp) / "state")}))
+            result = subprocess.run(
+                ["systemd-analyze", "verify", str(path)],
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_render_honours_an_explicit_env_file(self):
         unit = render({"JEV_ENV_FILE": "/etc/jev.env"})

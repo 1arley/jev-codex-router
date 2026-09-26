@@ -57,6 +57,15 @@ user_session_available() {
 }
 
 render_unit() {
+  # WorkingDirectory is a path, not an argv: systemd does not strip quotes
+  # there, and a quoted one fails the unit with "path is not absolute".
+  case "$REPO" in
+    /*) ;;
+    *)
+      echo "repository path is not absolute: $REPO" >&2
+      exit 1
+      ;;
+  esac
   cat <<EOF
 [Unit]
 Description=Jev Codex Router decision server (127.0.0.1:4319)
@@ -65,7 +74,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=$(unit_quote "$REPO")
+WorkingDirectory=$REPO
 ExecStart=$(unit_quote "$PYTHON") $(unit_quote "$REPO/server/jev_server.py")
 Restart=always
 RestartSec=5

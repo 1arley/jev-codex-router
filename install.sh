@@ -65,7 +65,16 @@ fi
 if [ -f "$state_dir/enabled-providers.json" ]; then
   "$router_dir/bin/install" --take-over-managed-router
 else
-  "$router_dir/install.sh" --no-provider --no-discovery --no-tray
+  # --no-provider keeps the setup idle: no provider is selected for the user.
+  # --no-discovery is deliberately absent. It persists a discovery kill-switch
+  # that the router treats as absolute, and `chatgpt-session enable` below
+  # refuses while it is set -- the shared native ChatGPT session *is* a
+  # credential read. Passing it made every fresh install fail at that step, and
+  # the only ways out were a second install or a hand-edited state file. Not
+  # passing it writes no marker and clears nobody's choice; discovery simply
+  # stays at its default, which is what every install without the flag has
+  # always been.
+  "$router_dir/install.sh" --no-provider --no-tray
 fi
 
 if "$router_cli" providers generic show jev --json >/dev/null 2>&1; then
